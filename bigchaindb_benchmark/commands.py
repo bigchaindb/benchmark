@@ -1,11 +1,13 @@
 import sys
+import time
 import argparse
 import logging
 import webbrowser
+import multiprocessing as mp
 
 import coloredlogs
 
-from . import utils
+from . import utils, bdb
 
 
 logger = logging.getLogger(__name__)
@@ -13,41 +15,48 @@ logger = logging.getLogger(__name__)
 
 def run_send(args):
     from bigchaindb_driver import BigchainDB
-    from bigchaindb_driver.crypto import generate_keypair
 
-    alice = generate_keypair()
-    bdb = BigchainDB(args.peer)
-    asset = None
+    for peer in args.peer:
+        driver = BigchainDB(peer, headers=args.auth)
 
-    if args.size:
-        asset = {'data': {'_': 'x' * args.size}}
-
-    prepared_creation_tx = bdb.transactions.prepare(
-            operation='CREATE',
-            signers=alice.public_key,
-            asset=asset,
-            metadata=None)
-
-    fulfilled_creation_tx = bdb.transactions.fulfill(
-            prepared_creation_tx,
-            private_keys=alice.private_key)
-
-    sent_creation_tx = bdb.transactions.send(fulfilled_creation_tx)
-    logger.info('Create transaction sent. Id: %s', sent_creation_tx['id'])
+        start = time.perf_counter()
+        tx = driver.transactions.send(bdb.generate(args.size))
+        delta = time.perf_counter() - start
+        logger.info('Send %s to %s [%.3fms]', tx['id'], peer, delta * 1e3)
 
     if args.open:
-        webbrowser.open('{}/api/v1/transactions/{}'.format(args.peer, sent_creation_tx['id']))
+        webbrowser.open('{}/api/v1/transactions/{}'.format(peer, tx['id']))
+
+
+def run_flood(args):
+    pass
 
 
 def create_parser():
     parser = argparse.ArgumentParser(
-            description='[experimental] Benchmarking tools for BigchainDB.')
+        description='Benchmarking tools for BigchainDB.')
 
     parser.add_argument('-l', '--log-level',
                         default='INFO')
 
     parser.add_argument('-p', '--peer',
-                        default='http://localhost:9984')
+                        action='append',
+                        help='BigchainDB peer to use. This option can be '
+                             'used multiple times.')
+
+    parser.add_argument('-a', '--auth',
+                        help='Set authentication tokens, '
+                             'format: <app_id>:<app_key>).')
+
+    parser.add_argument('--processes',
+                        default=mp.cpu_count(),
+                        help='Number of processes to spawn.')
+
+    parser.add_argument('--size', '-s',
+                        help='Asset size in bytes',
+                        type=int,
+                        default=0)
+
 
     # all the commands are contained in the subparsers object,
     # the command selected by the user will be stored in `args.command`
@@ -60,15 +69,19 @@ def create_parser():
                                         help='Send a single create transaction '
                                         'from a random keypair')
 
-    send_parser.add_argument('--open',
+    send_parser.add_argument('--open', '-o',
                              help='Open the transaction in the browser',
                              default=False,
                              action='store_true')
 
-    send_parser.add_argument('--size',
-                             help='Asset size in bytes',
-                             type=int,
-                             default=0)
+    flood_parser = subparsers.add_parser('flood',
+                                         help='Send a single create transaction '
+                                         'from a random keypair')
+
+    flood_parser.add_argument('--requests', '-r',
+                              help='Number of transactions to send to a single peer.',
+                              type=int,
+                              default=0)
 
     return parser
 

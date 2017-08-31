@@ -35,12 +35,15 @@ def start(parser, argv, scope, callback_before=None):
         raise NotImplementedError('Command `{}` not yet implemented'.
                                   format(args.command))
 
-    args.multiprocess = getattr(args, 'multiprocess', False)
+    if args.peer is None:
+        args.peer = ['http://localhost:9984']
 
-    if args.multiprocess is False:
-        args.multiprocess = 1
-    elif args.multiprocess is None:
-        args.multiprocess = mp.cpu_count()
+    if args.auth:
+        app_id, app_key = args.auth.split(':')
+        args.auth = {'app_id': app_id,
+                     'app_key': app_key}
+    else:
+        args.auth = {}
 
     if callback_before:
         callback_before(args)
