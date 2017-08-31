@@ -1,8 +1,7 @@
 import sys
-import time
 import argparse
 import logging
-import webbrowser
+from functools import partial
 import multiprocessing as mp
 
 import coloredlogs
@@ -14,22 +13,16 @@ logger = logging.getLogger(__name__)
 
 
 def run_send(args):
-    from bigchaindb_driver import BigchainDB
+    send = utils.unpack(partial(bdb.send, args))
 
-    for peer in args.peer:
-        driver = BigchainDB(peer, headers=args.auth)
-
-        start = time.perf_counter()
-        tx = driver.transactions.send(bdb.generate(args.size))
-        delta = time.perf_counter() - start
-        logger.info('Send %s to %s [%.3fms]', tx['id'], peer, delta * 1e3)
-
-    if args.open:
-        webbrowser.open('{}/api/v1/transactions/{}'.format(peer, tx['id']))
-
-
-def run_flood(args):
-    pass
+    with mp.Pool(args.processes) as pool:
+        results = pool.imap_unordered(
+                send,
+                zip(args.peer * args.requests,
+                    bdb.infinite_generate(args.broadcast,
+                                          args.size)))
+        for peer, txid, delta in results:
+            logger.info('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
 
 
 def create_parser():
@@ -57,7 +50,6 @@ def create_parser():
                         type=int,
                         default=0)
 
-
     # all the commands are contained in the subparsers object,
     # the command selected by the user will be stored in `args.command`
     # that is used by the `main` function to select which other
@@ -66,22 +58,19 @@ def create_parser():
                                        dest='command')
 
     send_parser = subparsers.add_parser('send',
-                                        help='Send a single create transaction '
-                                        'from a random keypair')
+                                        help='Send a single create '
+                                        'transaction from a random keypair')
 
-    send_parser.add_argument('--open', '-o',
-                             help='Open the transaction in the browser',
-                             default=False,
-                             action='store_true')
+    send_parser.add_argument('--requests', '-r',
+                             help='Number of transactions to send to a peer.',
+                             type=int,
+                             default=1)
 
-    flood_parser = subparsers.add_parser('flood',
-                                         help='Send a single create transaction '
-                                         'from a random keypair')
-
-    flood_parser.add_argument('--requests', '-r',
-                              help='Number of transactions to send to a single peer.',
-                              type=int,
-                              default=0)
+    send_parser.add_argument('--broadcast', '-b',
+                             help='Broadcast the same transaction N peers. '
+                                  '(Default is 1)',
+                             type=int,
+                             default=1)
 
     return parser
 

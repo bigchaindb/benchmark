@@ -1,7 +1,4 @@
-"""Utility functions and basic common arguments for
-``argparse.ArgumentParser``."""
-
-import multiprocessing as mp
+import sys
 
 
 def start(parser, argv, scope, callback_before=None):
@@ -38,6 +35,9 @@ def start(parser, argv, scope, callback_before=None):
     if args.peer is None:
         args.peer = ['http://localhost:9984']
 
+    if args.broadcast > len(args.peer):
+        sys.exit('`broadcast` must be smaller than the number of peers')
+
     if args.auth:
         app_id, app_key = args.auth.split(':')
         args.auth = {'app_id': app_id,
@@ -49,3 +49,12 @@ def start(parser, argv, scope, callback_before=None):
         callback_before(args)
 
     return func(args)
+
+
+class unpack:
+
+    def __init__(self, f):
+        self.f = f
+
+    def __call__(self, args):
+        return self.f(*args)
