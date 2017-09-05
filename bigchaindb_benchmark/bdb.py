@@ -1,13 +1,19 @@
 import time
+from uuid import uuid4
 
 
 from bigchaindb_driver import BigchainDB
 from bigchaindb_driver.crypto import generate_keypair
 
 
-def generate(size=None):
+def generate(keypair=None, size=None):
     driver = BigchainDB()
-    alice = generate_keypair()
+
+    if keypair:
+        alice = keypair
+    else:
+        alice = generate_keypair()
+
     asset = None
 
     if size:
@@ -17,7 +23,7 @@ def generate(size=None):
         operation='CREATE',
         signers=alice.public_key,
         asset=asset,
-        metadata=None)
+        metadata={'_': str(uuid4())})
 
     fulfilled_creation_tx = driver.transactions.fulfill(
         prepared_creation_tx,
@@ -26,9 +32,9 @@ def generate(size=None):
     return fulfilled_creation_tx
 
 
-def infinite_generate(repeat=1, size=None):
+def infinite_generate(keypair=None, repeat=1, size=None):
     while True:
-        tx = generate(size)
+        tx = generate(keypair, size)
         for _ in range(repeat):
             yield tx
 

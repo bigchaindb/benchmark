@@ -12,17 +12,51 @@ from . import utils, bdb
 logger = logging.getLogger(__name__)
 
 
+def run_check(args, keypair):
+    from pymongo import MongoClient
+    import time
+    from collections import Counter
+
+    counters = Counter()
+    diffs = Counter()
+
+    while True:
+        for peer in args.peer_mdb:
+            client = MongoClient('mongodb://' + peer)
+            db = client['bigchain']
+            count = db['backlog'].find({'outputs.public_keys': keypair.public_key}).count()
+            diffs[peer] = count - counters[peer]
+            counters[peer] = count
+            logger.info('Found %s transactions in %s [%s]', count, peer, diffs[peer])
+
+        if not(any(diffs.values())):
+            break
+        time.sleep(0.5)
+
+    for peer in args.peer_mdb:
+        if counters[peer] != args.requests * len(args.peer):
+            logger.error('Peer %s got an unexpected number of transactions. '
+                         '%s != %s', peer, counters[peer], args.requests)
+        else:
+            logger.info('Peer %s got expected %s transactions.', peer, counters[peer])
+
+
 def run_send(args):
+    from bigchaindb_driver.crypto import generate_keypair
+
+    keypair = generate_keypair()
     send = utils.unpack(partial(bdb.send, args))
+    generator = partial(bdb.infinite_generate, keypair, args.broadcast, args.size)
 
     with mp.Pool(args.processes) as pool:
         results = pool.imap_unordered(
                 send,
-                zip(args.peer * args.requests,
-                    bdb.infinite_generate(args.broadcast,
-                                          args.size)))
+                zip(args.peer_bdb * args.requests, generator()))
         for peer, txid, delta in results:
             logger.info('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
+
+    if args.check:
+        run_check(args, keypair)
 
 
 def create_parser():
@@ -71,6 +105,12 @@ def create_parser():
                                   '(Default is 1)',
                              type=int,
                              default=1)
+
+    send_parser.add_argument('--check', '-c',
+                             help='Check the transactions against the DB.'
+                                  '(Requires full access to MongoDB)',
+                             action='store_true',
+                             default=False)
 
     return parser
 

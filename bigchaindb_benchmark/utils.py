@@ -33,7 +33,17 @@ def start(parser, argv, scope, callback_before=None):
                                   format(args.command))
 
     if args.peer is None:
-        args.peer = ['http://localhost:9984']
+        args.peer = ['http://localhost:9984,localhost:27017']
+
+    args.peer_bdb = []
+    args.peer_mdb = []
+    for peer in args.peer:
+        bdb, _, mdb = peer.partition(',')
+        if not mdb:
+            mdb = 'localhost:27017'
+        args.peer_bdb.append(bdb)
+        args.peer_mdb.append(mdb)
+
 
     if args.broadcast > len(args.peer):
         sys.exit('`broadcast` must be smaller than the number of peers')
