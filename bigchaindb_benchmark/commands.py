@@ -20,7 +20,8 @@ def run_send(args):
                 send,
                 zip(args.peer * args.requests,
                     bdb.infinite_generate(args.broadcast,
-                                          args.size)))
+                                          args.size,
+                                          args.consecutive)))
         for peer, txid, delta in results:
             logger.info('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
 
@@ -65,6 +66,11 @@ def create_parser():
                              help='Number of transactions to send to a peer.',
                              type=int,
                              default=1)
+
+    send_parser.add_argument('--consecutive', '-c',
+                             help='Send consecutive TRANSFER transactions.',
+                             type=bool,
+                             default=False)
 
     send_parser.add_argument('--broadcast', '-b',
                              help='Broadcast the same transaction N peers. '
