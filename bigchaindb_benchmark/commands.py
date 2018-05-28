@@ -2,9 +2,15 @@ import sys
 import argparse
 import logging
 from functools import partial
+from itertools import cycle, repeat
+from threading import Thread
+import json
 import multiprocessing as mp
 
 import coloredlogs
+from websocket import create_connection
+
+import bigchaindb_benchmark
 
 from . import utils, bdb
 
@@ -12,52 +18,43 @@ from . import utils, bdb
 logger = logging.getLogger(__name__)
 
 
-def run_check(args, keypair):
-    from pymongo import MongoClient
-    import time
-    from collections import Counter
-
-    counters = Counter()
-    diffs = Counter()
-
-    while True:
-        for peer in args.peer_mdb:
-            client = MongoClient('mongodb://' + peer)
-            db = client['bigchain']
-            count = db['backlog'].find({'outputs.public_keys': keypair.public_key}).count()
-            diffs[peer] = count - counters[peer]
-            counters[peer] = count
-            logger.info('Found %s transactions in %s [%s]', count, peer, diffs[peer])
-
-        if not(any(diffs.values())):
-            break
-        time.sleep(0.5)
-
-    for peer in args.peer_mdb:
-        if counters[peer] != args.requests * len(args.peer):
-            logger.error('Peer %s got an unexpected number of transactions. '
-                         '%s != %s', peer, counters[peer], args.requests)
-        else:
-            logger.info('Peer %s got expected %s transactions.', peer, counters[peer])
-
-
 def run_send(args):
     from bigchaindb_driver.crypto import generate_keypair
 
+    ls = bigchaindb_benchmark.config['ls']
+
     keypair = generate_keypair()
-    send = utils.unpack(partial(bdb.send, args))
-    generator = partial(bdb.infinite_generate, keypair, args.broadcast, args.size)
+
+    BDB_ENDPOINT = args.peer[0]
+    WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(BDB_ENDPOINT.rsplit(':')[0])
+    sent_transactions = []
+
+    def listen():
+        ws = create_connection(WS_ENDPOINT)
+        while True:
+            result = ws.recv()
+            transaction_id = json.loads(result)['transaction_id']
+            try:
+                sent_transactions.remove(transaction_id)
+                ls['commit'] += 1
+            except ValueError:
+                pass
+            if not sent_transactions:
+                return
+
+    t = Thread(target=listen, daemon=False)
+    t.start()
 
     with mp.Pool(args.processes) as pool:
         results = pool.imap_unordered(
-                send,
-                zip(args.peer_bdb * args.requests, generator()))
+                bdb.sendstar,
+                zip(repeat(args),
+                    cycle(args.peer),
+                    bdb.generate(keypair, args.size, args.requests)))
         for peer, txid, delta in results:
-            logger.info('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
-
-    if args.check:
-        run_check(args, keypair)
-
+            sent_transactions.append(txid)
+            ls['sent'] += 1
+            logger.debug('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
 
 def create_parser():
     parser = argparse.ArgumentParser(
@@ -77,12 +74,8 @@ def create_parser():
 
     parser.add_argument('--processes',
                         default=mp.cpu_count(),
-                        help='Number of processes to spawn.')
-
-    parser.add_argument('--size', '-s',
-                        help='Asset size in bytes',
                         type=int,
-                        default=0)
+                        help='Number of processes to spawn.')
 
     # all the commands are contained in the subparsers object,
     # the command selected by the user will be stored in `args.command`
@@ -95,28 +88,31 @@ def create_parser():
                                         help='Send a single create '
                                         'transaction from a random keypair')
 
+    send_parser.add_argument('--size', '-s',
+                             help='Asset size in bytes',
+                             type=int,
+                             default=0)
+
+    send_parser.add_argument('--mode', '-m',
+                             help='Sending mode',
+                             choices=['sync', 'async', 'commit'],
+                             default='async')
+
     send_parser.add_argument('--requests', '-r',
                              help='Number of transactions to send to a peer.',
                              type=int,
                              default=1)
-
-    send_parser.add_argument('--broadcast', '-b',
-                             help='Broadcast the same transaction N peers. '
-                                  '(Default is 1)',
-                             type=int,
-                             default=1)
-
-    send_parser.add_argument('--check', '-c',
-                             help='Check the transactions against the DB.'
-                                  '(Requires full access to MongoDB)',
-                             action='store_true',
-                             default=False)
 
     return parser
 
 
 def configure(args):
     coloredlogs.install(level=args.log_level, logger=logger)
+
+    import logstats
+    ls = logstats.Logstats(logger=logger)
+    logstats.thread.start(ls)
+    bigchaindb_benchmark.config = {'ls': ls}
 
 
 def main():

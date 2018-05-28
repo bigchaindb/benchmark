@@ -1,12 +1,12 @@
 import time
 from uuid import uuid4
-
+from itertools import count
 
 from bigchaindb_driver import BigchainDB
 from bigchaindb_driver.crypto import generate_keypair
 
 
-def generate(keypair=None, size=None):
+def _generate(keypair=None, size=None):
     driver = BigchainDB()
 
     if keypair:
@@ -32,18 +32,21 @@ def generate(keypair=None, size=None):
     return fulfilled_creation_tx
 
 
-def infinite_generate(keypair=None, repeat=1, size=None):
-    while True:
-        tx = generate(keypair, size)
-        for _ in range(repeat):
-            yield tx
+def generate(keypair=None, size=None, amount=None):
+    for i in count():
+        if i == amount:
+            return
+        yield _generate(keypair, size)
 
 
 def send(args, peer, tx):
     driver = BigchainDB(peer, headers=args.auth)
 
     start = time.perf_counter()
-    driver.transactions.send(tx)
+    driver.transactions.send(tx, mode=args.mode)
     delta = time.perf_counter() - start
 
     return peer, tx['id'], delta
+
+def sendstar(args):
+    return send(*args)

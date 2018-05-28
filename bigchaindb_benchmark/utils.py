@@ -35,19 +35,6 @@ def start(parser, argv, scope, callback_before=None):
     if args.peer is None:
         args.peer = ['http://localhost:9984,localhost:27017']
 
-    args.peer_bdb = []
-    args.peer_mdb = []
-    for peer in args.peer:
-        bdb, _, mdb = peer.partition(',')
-        if not mdb:
-            mdb = 'localhost:27017'
-        args.peer_bdb.append(bdb)
-        args.peer_mdb.append(mdb)
-
-
-    if args.broadcast > len(args.peer):
-        sys.exit('`broadcast` must be smaller than the number of peers')
-
     if args.auth:
         app_id, app_key = args.auth.split(':')
         args.auth = {'app_id': app_id,
