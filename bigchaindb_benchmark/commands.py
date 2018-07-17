@@ -20,16 +20,18 @@ logger = logging.getLogger(__name__)
 
 def run_send(args):
     from bigchaindb_driver.crypto import generate_keypair
+    from urllib.parse import urlparse
 
     ls = bigchaindb_benchmark.config['ls']
 
     keypair = generate_keypair()
 
     BDB_ENDPOINT = args.peer[0]
-    WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(BDB_ENDPOINT.rsplit(':')[0])
+    WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(urlparse(BDB_ENDPOINT).hostname)
     sent_transactions = []
 
     def listen():
+        logger.info('Connecting to WebSocket %s', WS_ENDPOINT)
         ws = create_connection(WS_ENDPOINT)
         while True:
             result = ws.recv()
