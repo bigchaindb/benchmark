@@ -9,6 +9,7 @@ setup(
     install_requires=[
         'bigchaindb-driver==0.5.0.a4',
         'coloredlogs~=7.3.0',
+        'websocket-client',
     ],
     entry_points={
         'console_scripts': [
