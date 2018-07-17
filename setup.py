@@ -7,7 +7,7 @@ setup(
     author='BigchainDB devs',
     packages=find_packages(),
     install_requires=[
-        'bigchaindb-driver==0.5.0.a4',
+        'bigchaindb-driver~=0.5',
         'coloredlogs~=7.3.0',
         'websocket-client',
     ],
