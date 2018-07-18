@@ -42,11 +42,13 @@ def run_send(args):
             except ValueError:
                 pass
             if not sent_transactions:
+                ls()
                 return
 
     t = Thread(target=listen, daemon=False)
     t.start()
 
+    logger.info('Start sending transactions to %s', BDB_ENDPOINT)
     with mp.Pool(args.processes) as pool:
         results = pool.imap_unordered(
                 bdb.sendstar,
@@ -55,12 +57,16 @@ def run_send(args):
                     bdb.generate(keypair, args.size, args.requests)))
         for peer, txid, delta in results:
             sent_transactions.append(txid)
-            ls['sent'] += 1
+            ls['accept'] += 1
             logger.debug('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
 
 def create_parser():
     parser = argparse.ArgumentParser(
         description='Benchmarking tools for BigchainDB.')
+
+    parser.add_argument('--csv',
+                        type=str,
+                        default='out.csv')
 
     parser.add_argument('-l', '--log-level',
                         default='INFO')
@@ -98,7 +104,7 @@ def create_parser():
     send_parser.add_argument('--mode', '-m',
                              help='Sending mode',
                              choices=['sync', 'async', 'commit'],
-                             default='async')
+                             default='sync')
 
     send_parser.add_argument('--requests', '-r',
                              help='Number of transactions to send to a peer.',
@@ -107,12 +113,31 @@ def create_parser():
 
     return parser
 
-
 def configure(args):
     coloredlogs.install(level=args.log_level, logger=logger)
 
+    import csv
+    outfile = open(args.csv, 'w')
+
+    writer = csv.DictWriter(
+            outfile,
+            fieldnames=['_ts', 'accept', 'commit', 'accept.speed', 'commit.speed'],
+            extrasaction='ignore')
+    writer.writeheader()
+
+    def emit(stats):
+        logger.info('Processing transactions, '
+            'accepted: %s (%s tx/s), committed %s (%s tx/s)',
+            stats['accept'], stats.get('accept.speed', 0),
+            stats['commit'], stats.get('commit.speed', 0))
+        writer.writerow(stats)
+        outfile.flush()
+
+
     import logstats
-    ls = logstats.Logstats(logger=logger)
+    ls = logstats.Logstats(emit_func=emit)
+    ls['accept'] = 0
+    ls['commit'] = 0
     logstats.thread.start(ls)
     bigchaindb_benchmark.config = {'ls': ls}
 

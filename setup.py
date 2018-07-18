@@ -10,7 +10,7 @@ setup(
         'bigchaindb-driver~=0.5.0',
         'coloredlogs~=7.3.0',
         'websocket-client',
-        'logstats',
+        'logstats~=0.3.0',
     ],
     entry_points={
         'console_scripts': [
