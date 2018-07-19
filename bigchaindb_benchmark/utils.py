@@ -1,4 +1,9 @@
+from time import time
 import sys
+
+
+def ts():
+    return round(int(time() * 1e3))
 
 
 def start(parser, argv, scope, callback_before=None):

@@ -12,11 +12,16 @@ from websocket import create_connection
 
 import bigchaindb_benchmark
 
+from .utils import ts
+
 from . import utils, bdb
 
 
 logger = logging.getLogger(__name__)
 
+TRACKER = {}
+CSV_WRITER = None
+OUT_FILE = None
 
 def run_send(args):
     from bigchaindb_driver.crypto import generate_keypair
@@ -36,13 +41,14 @@ def run_send(args):
         while True:
             result = ws.recv()
             transaction_id = json.loads(result)['transaction_id']
-            try:
-                sent_transactions.remove(transaction_id)
+            if transaction_id in TRACKER:
+                TRACKER[transaction_id]['ts_commit'] = ts()
+                CSV_WRITER.writerow(TRACKER[transaction_id])
+                del TRACKER[transaction_id]
                 ls['commit'] += 1
-            except ValueError:
-                pass
-            if not sent_transactions:
+            if not TRACKER:
                 ls()
+                OUT_FILE.flush()
                 return
 
     t = Thread(target=listen, daemon=False)
@@ -55,10 +61,23 @@ def run_send(args):
                 zip(repeat(args),
                     cycle(args.peer),
                     bdb.generate(keypair, args.size, args.requests)))
-        for peer, txid, delta in results:
-            sent_transactions.append(txid)
-            ls['accept'] += 1
-            logger.debug('Send %s to %s [%.3fms]', txid, peer, delta * 1e3)
+        for peer, txid, ts_send, ts_accept, ts_error in results:
+            TRACKER[txid] = {
+                'txid': txid,
+                'ts_send': ts_send,
+                'ts_accept': ts_accept,
+                'ts_error': ts_error
+            }
+            if ts_accept:
+                ls['accept'] += 1
+                delta = (ts_accept - ts_send)
+                status = 'Success'
+            else:
+                ls['error'] += 1
+                delta = (ts_error - ts_send)
+                status = 'Error'
+
+            logger.debug('%s: %s to %s [%ims]', status, txid, peer, delta)
 
 def create_parser():
     parser = argparse.ArgumentParser(
@@ -114,30 +133,32 @@ def create_parser():
     return parser
 
 def configure(args):
+    global CSV_WRITER
+    global OUT_FILE
     coloredlogs.install(level=args.log_level, logger=logger)
 
     import csv
-    outfile = open(args.csv, 'w')
+    OUT_FILE = open(args.csv, 'w')
 
-    writer = csv.DictWriter(
-            outfile,
-            fieldnames=['_ts', 'accept', 'commit', 'accept.speed', 'commit.speed'],
-            extrasaction='ignore')
-    writer.writeheader()
+    CSV_WRITER = csv.DictWriter(
+            OUT_FILE,
+            # Might be useful to add 'operation' and 'size'
+            fieldnames=['txid', 'ts_send', 'ts_accept', 'ts_commit', 'ts_error'])
+    CSV_WRITER.writeheader()
 
     def emit(stats):
         logger.info('Processing transactions, '
-            'accepted: %s (%s tx/s), committed %s (%s tx/s)',
+            'accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s)',
             stats['accept'], stats.get('accept.speed', 0),
-            stats['commit'], stats.get('commit.speed', 0))
-        writer.writerow(stats)
-        outfile.flush()
+            stats['commit'], stats.get('commit.speed', 0),
+            stats['error'], stats.get('error.speed', 0))
 
 
     import logstats
     ls = logstats.Logstats(emit_func=emit)
     ls['accept'] = 0
     ls['commit'] = 0
+    ls['error'] = 0
     logstats.thread.start(ls)
     bigchaindb_benchmark.config = {'ls': ls}
 
