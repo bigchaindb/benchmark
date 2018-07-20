@@ -66,8 +66,10 @@ def run_send(args):
                 'txid': txid,
                 'ts_send': ts_send,
                 'ts_accept': ts_accept,
+                'ts_commit': None,
                 'ts_error': ts_error
             }
+
             if ts_accept:
                 ls['accept'] += 1
                 delta = (ts_accept - ts_send)
@@ -76,6 +78,8 @@ def run_send(args):
                 ls['error'] += 1
                 delta = (ts_error - ts_send)
                 status = 'Error'
+                CSV_WRITER.writerow(TRACKER[txid])
+                del TRACKER[txid]
 
             logger.debug('%s: %s to %s [%ims]', status, txid, peer, delta)
 
