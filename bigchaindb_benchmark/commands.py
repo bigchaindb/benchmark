@@ -134,6 +134,11 @@ def create_parser():
                              type=int,
                              default=1)
 
+    send_parser.add_argument('--unconfirmed_tx_th', '-th',
+                             help='Threshold for number of unconfirmed transactions in tendermint mempool',
+                             type=int,
+                             default=5000)
+
     return parser
 
 def configure(args):

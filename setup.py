@@ -11,6 +11,8 @@ setup(
         'coloredlogs~=7.3.0',
         'websocket-client',
         'logstats~=0.3.0',
+        'requests~=2.19.1',
+        'cachetools~=2.1.0',
     ],
     entry_points={
         'console_scripts': [
