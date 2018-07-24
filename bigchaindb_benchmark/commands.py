@@ -4,6 +4,7 @@ import logging
 from functools import partial
 from itertools import cycle, repeat
 from threading import Thread
+from time import sleep
 import json
 import multiprocessing as mp
 
@@ -35,9 +36,15 @@ def run_send(args):
     WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(urlparse(BDB_ENDPOINT).hostname)
     sent_transactions = []
 
-    def listen():
-        logger.info('Connecting to WebSocket %s', WS_ENDPOINT)
-        ws = create_connection(WS_ENDPOINT)
+    logger.info('Connecting to WebSocket %s', WS_ENDPOINT)
+    ws = create_connection(WS_ENDPOINT)
+
+    def ping(ws):
+        while True:
+            ws.ping()
+            sleep(2)
+
+    def listen(ws):
         while True:
             result = ws.recv()
             transaction_id = json.loads(result)['transaction_id']
@@ -51,8 +58,10 @@ def run_send(args):
                 OUT_FILE.flush()
                 return
 
-    t = Thread(target=listen, daemon=False)
+    t = Thread(target=listen, args=(ws, ), daemon=False)
+    p = Thread(target=ping, args=(ws, ), daemon=True)
     t.start()
+    p.start()
 
     logger.info('Start sending transactions to %s', BDB_ENDPOINT)
     with mp.Pool(args.processes) as pool:
