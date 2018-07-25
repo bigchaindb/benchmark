@@ -53,6 +53,7 @@ def run_send(args):
                 CSV_WRITER.writerow(TRACKER[transaction_id])
                 del TRACKER[transaction_id]
                 ls['commit'] += 1
+                ls['mempool'] = ls['accept'] - ls['commit']
             if not TRACKER:
                 ls()
                 OUT_FILE.flush()
@@ -79,10 +80,12 @@ def run_send(args):
                 'ts_error': ts_error
             }
 
+
             if ts_accept:
                 ls['accept'] += 1
                 delta = (ts_accept - ts_send)
                 status = 'Success'
+                ls['mempool'] = ls['accept'] - ls['commit']
             else:
                 ls['error'] += 1
                 delta = (ts_error - ts_send)
@@ -166,10 +169,11 @@ def configure(args):
 
     def emit(stats):
         logger.info('Processing transactions, '
-            'accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s)',
+            'accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s), mempool %s (%s tx/s)',
             stats['accept'], stats.get('accept.speed', 0),
             stats['commit'], stats.get('commit.speed', 0),
-            stats['error'], stats.get('error.speed', 0))
+            stats['error'], stats.get('error.speed', 0),
+            stats['mempool'], stats.get('mempool.speed', 0))
 
 
     import logstats

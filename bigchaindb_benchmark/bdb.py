@@ -43,7 +43,7 @@ def generate(keypair=None, size=None, amount=None):
             return
         yield _generate(keypair, size)
 
-@ttl_cache(ttl=60)
+@ttl_cache(ttl=10)
 def get_unconfirmed_tx(tm_http_api):
     num_unconfirmed_txs_api = '/num_unconfirmed_txs'
     tm_http_api = tm_http_api.strip('/')
@@ -62,7 +62,7 @@ def send(args, peer, tx):
     TM_HTTP_ENDPOINT = 'http://{}:26657'.format(urlparse(peer).hostname)
     unconfirmed_tx_th = args.unconfirmed_tx_th
     unconfirmed_txs = get_unconfirmed_tx(TM_HTTP_ENDPOINT)
-    backoff_time = 0.5
+    backoff_time = 1
     while unconfirmed_txs > unconfirmed_tx_th:
         sleep(backoff_time)
         unconfirmed_txs = get_unconfirmed_tx(TM_HTTP_ENDPOINT)
