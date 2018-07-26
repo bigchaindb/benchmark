@@ -71,15 +71,15 @@ def run_send(args):
                 zip(repeat(args),
                     cycle(args.peer),
                     bdb.generate(keypair, args.size, args.requests)))
-        for peer, txid, ts_send, ts_accept, ts_error in results:
+        for peer, txid, size, ts_send, ts_accept, ts_error in results:
             TRACKER[txid] = {
                 'txid': txid,
+                'size': size,
                 'ts_send': ts_send,
                 'ts_accept': ts_accept,
                 'ts_commit': None,
-                'ts_error': ts_error
+                'ts_error': ts_error,
             }
-
 
             if ts_accept:
                 ls['accept'] += 1
@@ -164,7 +164,7 @@ def configure(args):
     CSV_WRITER = csv.DictWriter(
             OUT_FILE,
             # Might be useful to add 'operation' and 'size'
-            fieldnames=['txid', 'ts_send', 'ts_accept', 'ts_commit', 'ts_error'])
+            fieldnames=['txid', 'size', 'ts_send', 'ts_accept', 'ts_commit', 'ts_error'])
     CSV_WRITER.writeheader()
 
     def emit(stats):

@@ -1,4 +1,6 @@
 import requests
+
+from json import dumps
 from uuid import uuid4
 from itertools import count
 from time import sleep
@@ -79,8 +81,7 @@ def send(args, peer, tx):
         ts_error = ts()
     else:
         ts_accept = ts()
-
-    return peer, tx['id'], ts_send, ts_accept, ts_error
+    return peer, tx['id'], len(dumps(tx)), ts_send, ts_accept, ts_error
 
 def sendstar(args):
     return send(*args)
