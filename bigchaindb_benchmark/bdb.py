@@ -1,5 +1,6 @@
 import requests
 from requests.exceptions import ConnectionError, Timeout
+from websocket import create_connection
 
 import base64
 from json import dumps
@@ -59,11 +60,21 @@ def get_unconfirmed_tx(tm_http_api):
     except:
         raise
 
+
+WS = None
+
 def send(args, peer, tx):
+    global WS
+
+    WS_ENDPOINT = 'ws://{}:26657/websocket'.format(urlparse(peer).hostname)
+    if not WS:
+        WS = create_connection(WS_ENDPOINT)
+
     # Stop sending transactions if unconfirmed
     # transaction in mempool are above the set
     # threshold
     TM_HTTP_ENDPOINT = 'http://{}:26657'.format(urlparse(peer).hostname)
+
     unconfirmed_tx_th = args.unconfirmed_tx_th
     unconfirmed_txs = get_unconfirmed_tx(TM_HTTP_ENDPOINT)
     backoff_time = 1
@@ -78,15 +89,15 @@ def send(args, peer, tx):
     ts_accept = None
 
     try:
-        driver.transactions.send(tx, mode=args.mode)
         payload = {
             'method': args.mode,
             'jsonrpc': '2.0',
             'params': [base64.b64encode(dumps(tx).encode('utf8')).decode('utf8')],
             'id': str(uuid4())
         }
-        requests.post(TM_HTTP_ENDPOINT, json=payload)
-    except (ConnectionError, Timeout):
+        WS.send(dumps(payload))
+    except Exception as e:
+        print(e)
         ts_error = ts()
     else:
         ts_accept = ts()
