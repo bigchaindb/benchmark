@@ -1,5 +1,7 @@
 import requests
+from requests.exceptions import ConnectionError, Timeout
 
+import base64
 from json import dumps
 from uuid import uuid4
 from itertools import count
@@ -77,7 +79,14 @@ def send(args, peer, tx):
 
     try:
         driver.transactions.send(tx, mode=args.mode)
-    except TransportError:
+        payload = {
+            'method': args.mode,
+            'jsonrpc': '2.0',
+            'params': [base64.b64encode(dumps(tx).encode('utf8')).decode('utf8')],
+            'id': str(uuid4())
+        }
+        requests.post(TM_HTTP_ENDPOINT, json=payload)
+    except (ConnectionError, Timeout):
         ts_error = ts()
     else:
         ts_accept = ts()
