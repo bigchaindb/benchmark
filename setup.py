@@ -13,10 +13,13 @@ setup(
         'logstats~=0.3.0',
         'requests~=2.19.1',
         'cachetools~=2.1.0',
+        'websockets~=6.0.0',
+        'aiohttp~=3.0.0',
     ],
     entry_points={
         'console_scripts': [
             'bigchaindb-benchmark=bigchaindb_benchmark.commands:main',
+            'bigchaindb-blaster=bigchaindb_benchmark.async.__init__:main',
         ],
     },
 )
