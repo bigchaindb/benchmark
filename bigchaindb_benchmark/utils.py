@@ -40,6 +40,12 @@ def start(parser, argv, scope, callback_before=None):
     if args.peer is None:
         args.peer = ['http://localhost:9984,localhost:27017']
 
+    if args.requests < args.processes:
+        args.processes = args.requests
+        args.requests_per_worker = 1
+    else:
+        args.requests_per_worker = args.requests // args.processes
+
     if args.auth:
         app_id, app_key = args.auth.split(':')
         args.auth = {'app_id': app_id,

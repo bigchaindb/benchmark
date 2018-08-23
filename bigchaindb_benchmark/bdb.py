@@ -45,7 +45,7 @@ def _generate(keypair=None, size=None):
 def generate(keypair=None, size=None, amount=None):
     for i in count():
         if i == amount:
-            return
+            break
         yield _generate(keypair, size)
 
 @ttl_cache(ttl=10)
@@ -60,28 +60,7 @@ def get_unconfirmed_tx(tm_http_api):
     except:
         raise
 
-
-WS = None
-
 def send(args, peer, tx):
-    global WS
-
-    WS_ENDPOINT = 'ws://{}:26657/websocket'.format(urlparse(peer).hostname)
-    if not WS:
-        WS = create_connection(WS_ENDPOINT)
-
-    # Stop sending transactions if unconfirmed
-    # transaction in mempool are above the set
-    # threshold
-    TM_HTTP_ENDPOINT = 'http://{}:26657'.format(urlparse(peer).hostname)
-
-    unconfirmed_tx_th = args.unconfirmed_tx_th
-    unconfirmed_txs = get_unconfirmed_tx(TM_HTTP_ENDPOINT)
-    backoff_time = 1
-    while unconfirmed_txs > unconfirmed_tx_th:
-        sleep(backoff_time)
-        unconfirmed_txs = get_unconfirmed_tx(TM_HTTP_ENDPOINT)
-
     driver = BigchainDB(peer, headers=args.auth)
 
     ts_send = ts()
@@ -89,13 +68,7 @@ def send(args, peer, tx):
     ts_accept = None
 
     try:
-        payload = {
-            'method': args.mode,
-            'jsonrpc': '2.0',
-            'params': [base64.b64encode(dumps(tx).encode('utf8')).decode('utf8')],
-            'id': str(uuid4())
-        }
-        WS.send(dumps(payload))
+        driver.transactions.send(tx, mode=args.mode)
     except Exception as e:
         print(e)
         ts_error = ts()
@@ -103,5 +76,7 @@ def send(args, peer, tx):
         ts_accept = ts()
     return peer, tx['id'], len(dumps(tx)), ts_send, ts_accept, ts_error
 
-def sendstar(args):
-    return send(*args)
+def worker(queue, args):
+    keypair = generate_keypair()
+    for tx in generate(keypair=keypair, size=args.size, amount=args.requests_per_worker):
+        queue.put(send(args, args.peer[0], tx))

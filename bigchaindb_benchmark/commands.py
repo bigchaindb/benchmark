@@ -9,6 +9,8 @@ from time import sleep
 import json
 import multiprocessing as mp
 
+from queue import Empty
+
 import coloredlogs
 from websocket import create_connection
 
@@ -24,10 +26,12 @@ logger = logging.getLogger(__name__)
 TRACKER = {}
 CSV_WRITER = None
 OUT_FILE = None
+PENDING = True
 
 def run_send(args):
     from bigchaindb_driver.crypto import generate_keypair
     from urllib.parse import urlparse
+
 
     ls = bigchaindb_benchmark.config['ls']
 
@@ -52,17 +56,17 @@ def run_send(args):
     result = ws.recv()
 
     def ping(ws):
-        while True:
+        while PENDING:
             ws.ping()
             sleep(2)
 
     def listen(ws):
-        while True:
+        global PENDING
+        while PENDING:
             result = ws.recv()
             event = json.loads(result)
             if (event['result']['query'] == 'tm.event=\'NewBlock\''):
                 block_txs = event['result']['data']['value']['block']['data']['txs']
-                ls['event_id'] = event['id']
 
                 # Only push non empty blocks
                 if block_txs:
@@ -78,43 +82,47 @@ def run_send(args):
                         if not TRACKER:
                             ls()
                             OUT_FILE.flush()
-                            return
+                            PENDING = False
 
     t = Thread(target=listen, args=(ws, ), daemon=False)
     p = Thread(target=ping, args=(ws, ), daemon=True)
     t.start()
     p.start()
 
+    results_queue = mp.Queue()
+
     logger.info('Start sending transactions to %s', BDB_ENDPOINT)
-    with mp.Pool(args.processes) as pool:
-        results = pool.imap_unordered(
-                bdb.sendstar,
-                zip(repeat(args),
-                    cycle(args.peer),
-                    bdb.generate(keypair, args.size, args.requests)))
-        for peer, txid, size, ts_send, ts_accept, ts_error in results:
-            TRACKER[txid] = {
-                'txid': txid,
-                'size': size,
-                'ts_send': ts_send,
-                'ts_accept': ts_accept,
-                'ts_commit': None,
-                'ts_error': ts_error,
-            }
+    for _ in range(args.processes):
+        process = mp.Process(target=bdb.worker, args=(results_queue, args))
+        process.start()
 
-            if ts_accept:
-                ls['accept'] += 1
-                delta = (ts_accept - ts_send)
-                status = 'Success'
-                ls['mempool'] = ls['accept'] - ls['commit']
-            else:
-                ls['error'] += 1
-                delta = (ts_error - ts_send)
-                status = 'Error'
-                CSV_WRITER.writerow(TRACKER[txid])
-                del TRACKER[txid]
+    while PENDING:
+        try:
+            peer, txid, size, ts_send, ts_accept, ts_error = results_queue.get(timeout=1)
+        except Empty:
+            continue
+        TRACKER[txid] = {
+            'txid': txid,
+            'size': size,
+            'ts_send': ts_send,
+            'ts_accept': ts_accept,
+            'ts_commit': None,
+            'ts_error': ts_error,
+        }
 
-            logger.debug('%s: %s to %s [%ims]', status, txid, peer, delta)
+        if ts_accept:
+            ls['accept'] += 1
+            delta = (ts_accept - ts_send)
+            status = 'Success'
+            ls['mempool'] = ls['accept'] - ls['commit']
+        else:
+            ls['error'] += 1
+            delta = (ts_error - ts_send)
+            status = 'Error'
+            CSV_WRITER.writerow(TRACKER[txid])
+            del TRACKER[txid]
+
+        logger.debug('%s: %s to %s [%ims]', status, txid, peer, delta)
 
 def create_parser():
     parser = argparse.ArgumentParser(
@@ -189,9 +197,8 @@ def configure(args):
     CSV_WRITER.writeheader()
 
     def emit(stats):
-        logger.info('Processing transactions, event_id: %s, '
+        logger.info('Processing transactions, '
             'accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s), mempool %s (%s tx/s)',
-            stats['event_id'],
             stats['accept'], stats.get('accept.speed', 0),
             stats['commit'], stats.get('commit.speed', 0),
             stats['error'], stats.get('error.speed', 0),
@@ -200,7 +207,6 @@ def configure(args):
 
     import logstats
     ls = logstats.Logstats(emit_func=emit)
-    ls['event_id'] = 'bdb_stream'
     ls['accept'] = 0
     ls['commit'] = 0
     ls['error'] = 0
