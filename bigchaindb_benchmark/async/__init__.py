@@ -87,9 +87,9 @@ def create_parser():
                              choices=['sync', 'async', 'commit'],
                              default='sync')
 
-    send_parser.add_argument('--requests', '-r',
+    send_parser.add_argument('--rate', '-r',
                              help='Number of transactions to send to a peer.',
-                             type=int,
+                             type=float,
                              default=1)
 
     return parser
