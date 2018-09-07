@@ -1,6 +1,7 @@
 import requests
 from requests.exceptions import ConnectionError, Timeout
 from websocket import create_connection
+import logging
 
 import base64
 from json import dumps
@@ -15,6 +16,8 @@ from bigchaindb_driver.exceptions import TransportError
 from bigchaindb_driver.crypto import generate_keypair
 from cachetools.func import ttl_cache
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 def _generate(keypair=None, size=None):
     driver = BigchainDB()
@@ -70,13 +73,20 @@ def send(args, peer, tx):
     try:
         driver.transactions.send(tx, mode=args.mode)
     except Exception as e:
-        print(e)
         ts_error = ts()
     else:
         ts_accept = ts()
     return peer, tx['id'], len(dumps(tx)), ts_send, ts_accept, ts_error
 
-def worker(queue, args):
+def worker(queue, args, index):
     keypair = generate_keypair()
+    tries = 0
     for tx in generate(keypair=keypair, size=args.size, amount=args.requests_per_worker):
-        queue.put(send(args, args.peer[0], tx))
+        result = send(args, args.peer[index], tx)
+        queue.put(result)
+        if result[5]:
+            logger.info('Error, going to sleep for %ss', 2**tries)
+            sleep(2**tries)
+            tries = min(tries + 1, 4)
+        else:
+            tries = 0

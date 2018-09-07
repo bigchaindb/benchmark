@@ -38,22 +38,12 @@ def run_send(args):
     keypair = generate_keypair()
 
     BDB_ENDPOINT = args.peer[0]
-    WS_ENDPOINT = 'ws://{}:26657/websocket'.format(urlparse(BDB_ENDPOINT).hostname)
-    #WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(urlparse(BDB_ENDPOINT).hostname)
+    #WS_ENDPOINT = 'ws://{}:26657/websocket'.format(urlparse(BDB_ENDPOINT).hostname)
+    WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(urlparse(BDB_ENDPOINT).hostname)
     sent_transactions = []
 
     logger.info('Connecting to WebSocket %s', WS_ENDPOINT)
     ws = create_connection(WS_ENDPOINT)
-
-    # Attach to tm websocket
-    payload = {
-        'method': 'subscribe',
-        'jsonrpc': '2.0',
-        'params': ['tm.event=\'NewBlock\''],
-        'id': 'bdb_stream'
-    }
-    ws.send(json.dumps(payload))
-    result = ws.recv()
 
     def ping(ws):
         while PENDING:
@@ -64,25 +54,17 @@ def run_send(args):
         global PENDING
         while PENDING:
             result = ws.recv()
-            event = json.loads(result)
-            if (event['result']['query'] == 'tm.event=\'NewBlock\''):
-                block_txs = event['result']['data']['value']['block']['data']['txs']
-
-                # Only push non empty blocks
-                if block_txs:
-                    for transaction in block_txs:
-                        transaction = json.loads(base64.b64decode(transaction.encode('utf8')).decode('utf8'))
-                        transaction_id = transaction['id']
-                        if transaction_id in TRACKER:
-                            TRACKER[transaction_id]['ts_commit'] = ts()
-                            CSV_WRITER.writerow(TRACKER[transaction_id])
-                            del TRACKER[transaction_id]
-                            ls['commit'] += 1
-                            ls['mempool'] = ls['accept'] - ls['commit']
-                        if not TRACKER:
-                            ls()
-                            OUT_FILE.flush()
-                            PENDING = False
+            transaction_id = json.loads(result)['transaction_id']
+            if transaction_id in TRACKER:
+                TRACKER[transaction_id]['ts_commit'] = ts()
+                CSV_WRITER.writerow(TRACKER[transaction_id])
+                del TRACKER[transaction_id]
+                ls['commit'] += 1
+                ls['mempool'] = ls['accept'] - ls['commit']
+            if not TRACKER:
+                ls()
+                OUT_FILE.flush()
+                PENDING = False
 
     t = Thread(target=listen, args=(ws, ), daemon=False)
     p = Thread(target=ping, args=(ws, ), daemon=True)
@@ -92,8 +74,8 @@ def run_send(args):
     results_queue = mp.Queue()
 
     logger.info('Start sending transactions to %s', BDB_ENDPOINT)
-    for _ in range(args.processes):
-        process = mp.Process(target=bdb.worker, args=(results_queue, args))
+    for i in range(args.processes):
+        process = mp.Process(target=bdb.worker, args=(results_queue, args, i % len(args.peer)))
         process.start()
 
     while PENDING:
