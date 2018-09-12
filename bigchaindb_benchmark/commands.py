@@ -82,6 +82,11 @@ def run_send(args):
     for i in range(args.processes):
         mp.Process(target=bdb.worker_generate,
                    args=(args, requests_queue)).start()
+
+    while not requests_queue.full():
+        sleep(.1)
+
+    for i in range(args.processes):
         mp.Process(target=bdb.worker_send,
                    args=(args, requests_queue, results_queue),
                    daemon=True).start()
