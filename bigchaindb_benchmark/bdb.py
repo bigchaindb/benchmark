@@ -2,6 +2,7 @@ import requests
 from requests.exceptions import ConnectionError, Timeout
 from websocket import create_connection
 import logging
+import random
 
 import base64
 from json import dumps
@@ -63,30 +64,40 @@ def get_unconfirmed_tx(tm_http_api):
     except:
         raise
 
-def send(args, peer, tx):
-    driver = BigchainDB(peer, headers=args.auth)
+def send(peer, tx, headers={}, mode='sync'):
+    driver = BigchainDB(peer, headers=headers)
 
     ts_send = ts()
     ts_error = None
     ts_accept = None
 
     try:
-        driver.transactions.send(tx, mode=args.mode)
+        driver.transactions.send(tx, mode=mode)
     except Exception as e:
         ts_error = ts()
     else:
         ts_accept = ts()
     return peer, tx['id'], len(dumps(tx)), ts_send, ts_accept, ts_error
 
-def worker(queue, args, index):
-    keypair = generate_keypair()
+
+def worker_send(args, requests_queue, results_queue):
     tries = 0
-    for tx in generate(keypair=keypair, size=args.size, amount=args.requests_per_worker):
-        result = send(args, args.peer[index], tx)
-        queue.put(result)
+    while True:
+        tx = requests_queue.get()
+        result = send(random.choice(args.peer),
+                      tx,
+                      args.auth,
+                      args.mode)
         if result[5]:
-            logger.info('Error, going to sleep for %ss', 2**tries)
+            print('Error, going to sleep for %ss', 2**tries)
             sleep(2**tries)
             tries = min(tries + 1, 4)
         else:
             tries = 0
+        results_queue.put(result)
+
+
+def worker_generate(args, requests_queue):
+    keypair = generate_keypair()
+    for tx in generate(keypair=keypair, size=args.size, amount=args.requests_per_worker):
+        requests_queue.put(tx)

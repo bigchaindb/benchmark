@@ -83,7 +83,7 @@ p[0][1].set_ylabel('tx number')
 for tps, median in zip(S_ACCEPT, M_ACCEPT):
     x = tps.index
     p[0][1].scatter(x, tps, s=1)
-    p[0][1].plot(x, [median] * len(x), '--')
+    p[0][1].plot(x, [median] * len(x), '--k')
 
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     p[0][1].text(x[-1], median+40,
@@ -99,7 +99,7 @@ p[1][1].set_ylabel('tx number')
 for tps, median in zip(S_COMMIT, M_COMMIT):
     x = tps.index
     p[1][1].scatter(x, tps, s=1)
-    p[1][1].plot(x, [median] * len(x), '--')
+    p[1][1].plot(x, [median] * len(x), '--k')
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     p[1][1].text(x[-1], median+40,
             'median: {} tx/s'.format(median),

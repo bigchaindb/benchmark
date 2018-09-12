@@ -42,8 +42,16 @@ def run_send(args):
     WS_ENDPOINT = 'ws://{}:9985/api/v1/streams/valid_transactions'.format(urlparse(BDB_ENDPOINT).hostname)
     sent_transactions = []
 
+    requests_queue = mp.Queue(maxsize=10000)
+    results_queue = mp.Queue()
+
     logger.info('Connecting to WebSocket %s', WS_ENDPOINT)
     ws = create_connection(WS_ENDPOINT)
+
+    def sample_queue(requests_queue):
+        while True:
+            ls['queue'] = requests_queue.qsize()
+            sleep(1)
 
     def ping(ws):
         while PENDING:
@@ -66,17 +74,17 @@ def run_send(args):
                 OUT_FILE.flush()
                 PENDING = False
 
-    t = Thread(target=listen, args=(ws, ), daemon=False)
-    p = Thread(target=ping, args=(ws, ), daemon=True)
-    t.start()
-    p.start()
-
-    results_queue = mp.Queue()
+    Thread(target=listen, args=(ws, ), daemon=False).start()
+    Thread(target=ping, args=(ws, ), daemon=True).start()
+    Thread(target=sample_queue, args=(requests_queue, ), daemon=True).start()
 
     logger.info('Start sending transactions to %s', BDB_ENDPOINT)
     for i in range(args.processes):
-        process = mp.Process(target=bdb.worker, args=(results_queue, args, i % len(args.peer)))
-        process.start()
+        mp.Process(target=bdb.worker_generate,
+                   args=(args, requests_queue)).start()
+        mp.Process(target=bdb.worker_send,
+                   args=(args, requests_queue, results_queue),
+                   daemon=True).start()
 
     while PENDING:
         try:
@@ -180,7 +188,8 @@ def configure(args):
 
     def emit(stats):
         logger.info('Processing transactions, '
-            'accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s), mempool %s (%s tx/s)',
+            'queue: %s (%s tx/s), accepted: %s (%s tx/s), committed %s (%s tx/s), errored %s (%s tx/s), mempool %s (%s tx/s)',
+            stats['queue'], stats.get('queue.speed', 0),
             stats['accept'], stats.get('accept.speed', 0),
             stats['commit'], stats.get('commit.speed', 0),
             stats['error'], stats.get('error.speed', 0),
