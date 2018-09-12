@@ -1,3 +1,4 @@
+import os
 import sys
 import math
 from itertools import repeat
@@ -19,6 +20,9 @@ ts_max = []
 
 f, p = plt.subplots(2, 2)
 longest = 0
+
+_, filename = os.path.split(sys.argv[1])
+plt.suptitle(filename)
 
 def to_seconds(s):
     return pd.to_datetime(np.ceil(s / 1000), unit='s')
@@ -64,32 +68,43 @@ p[0][0].set_title('time to accept tx')
 p[0][0].hist(H_ACCEPT, bins=25)
 #p[0][0].set_yscale('log')
 p[0][0].set_xlabel('time to accept (s)')
-p[0][0].set_ylabel('number of txs (log)')
+p[0][0].set_ylabel('number of txs')
 
 p[1][0].set_title('time to finalize tx')
 p[1][0].hist(H_COMMIT, bins=25)
 #p[1][0].set_yscale('log')
 p[1][0].set_xlabel('time to finalize (s)')
-p[1][0].set_ylabel('number of txs (log)')
+p[1][0].set_ylabel('number of txs')
 
 p[0][1].set_title('accepted txs per second')
 #p[0][1].set_yscale('log')
-p[0][1].set_xlabel('time')
-p[0][1].set_ylabel('tx/s')
+p[0][1].set_xlabel('time (s)')
+p[0][1].set_ylabel('tx number')
 for tps, median in zip(S_ACCEPT, M_ACCEPT):
     x = tps.index
     p[0][1].scatter(x, tps, s=1)
-    p[0][1].plot(x, [median] * len(x), '--k')
+    p[0][1].plot(x, [median] * len(x), '--')
+
+    bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
+    p[0][1].text(x[-1], median+40,
+            'median: {} tx/s'.format(median),
+            ha="right", va="bottom", size=8,
+            bbox=bbox_props)
+
 
 p[1][1].set_title('finalized txs per second')
 #p[1][1].set_yscale('log')
-p[1][1].set_xlabel('time')
-p[1][1].set_ylabel('tx/s')
-for tps in S_COMMIT:
+p[1][1].set_xlabel('time (s)')
+p[1][1].set_ylabel('tx number')
+for tps, median in zip(S_COMMIT, M_COMMIT):
     x = tps.index
     p[1][1].scatter(x, tps, s=1)
-    p[1][1].plot(x, [median] * len(x), '--k')
+    p[1][1].plot(x, [median] * len(x), '--')
+    bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
+    p[1][1].text(x[-1], median+40,
+            'median: {} tx/s'.format(median),
+            ha="right", va="bottom", size=8,
+            bbox=bbox_props)
 
 plt.subplots_adjust(left=0.125, right=0.9, bottom=0.1, top=0.9, wspace=0.4, hspace=0.6)
-plt.savefig('/home/vrde/Desktop/test.svg')
 plt.show()
