@@ -53,40 +53,42 @@ for csvfile in sys.argv[1:]:
     print(d['d_accept'].quantile([.68, .95, .997]))
     print(d['d_commit'].quantile([.68, .95, .997]))
 
+    tps_accept = tps_accept.reindex(range(math.ceil(max(d['rt_accept']))), fill_value=0)
     S_ACCEPT.append(tps_accept)
+    M_ACCEPT.append({
+        'median': round(tps_accept.median()),
+        'mean': round(tps_accept.mean())
+    })
+
+    tps_commit = tps_commit.reindex(range(math.ceil(max(d['rt_commit']))), fill_value=0)
     S_COMMIT.append(tps_commit)
+    M_COMMIT.append({
+        'median': round(tps_commit.median()),
+        'mean': round(tps_commit.mean())
+    })
 
 
 for i, tps in enumerate(S_ACCEPT):
     S_ACCEPT[i] = tps.reindex(range(longest), fill_value=0)
-    M_ACCEPT.append({
-        'median': round(S_ACCEPT[i].median()),
-        'mean': round(S_ACCEPT[i].mean())
-    })
 
 for i, tps in enumerate(S_COMMIT):
     S_COMMIT[i] = tps.reindex(range(longest), fill_value=0)
-    M_COMMIT.append({
-        'median': round(S_COMMIT[i].median()),
-        'mean': round(S_COMMIT[i].mean())
-    })
-
 
 p[0][0].set_title('Time to accept transactions')
 p[0][0].hist(H_ACCEPT, bins=25)
 #p[0][0].set_yscale('log')
-p[0][0].set_xlabel('Seconds')
-p[0][0].set_ylabel('Amount')
+p[0][0].set_xlabel('Time (seconds)')
+p[0][0].set_ylabel('Number of transactions')
 
 p[1][0].set_title('Time to finalize transactions')
 p[1][0].hist(H_COMMIT, bins=25)
 #p[1][0].set_yscale('log')
-p[1][0].set_xlabel('Seconds')
-p[1][0].set_ylabel('Amount')
+p[1][0].set_xlabel('Time (seconds)')
+p[1][0].set_ylabel('Number of transactions')
 
 p[0][1].set_title('Accepted transactions per second')
 #p[0][1].set_yscale('log')
-p[0][1].set_xlabel('Seconds')
+p[0][1].set_xlabel('Time (seconds)')
 p[0][1].set_ylabel('Amount')
 for tps, vals in zip(S_ACCEPT, M_ACCEPT):
     x = tps.index
