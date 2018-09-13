@@ -29,6 +29,7 @@ def to_seconds(s):
 
 for csvfile in sys.argv[1:]:
     d = pd.read_csv(csvfile)
+    # d = np.array_split(d, 3)[1]
 
     min_ts = min(d['ts_send'])
 
@@ -49,61 +50,68 @@ for csvfile in sys.argv[1:]:
 
     H_ACCEPT.append(d['d_accept'])
     H_COMMIT.append(d['d_commit'])
+    print(d['d_accept'].quantile([.68, .95, .997]))
+    print(d['d_commit'].quantile([.68, .95, .997]))
 
     S_ACCEPT.append(tps_accept)
     S_COMMIT.append(tps_commit)
 
-    M_ACCEPT.append(tps_accept.median())
-    M_COMMIT.append(tps_commit.median())
-
 
 for i, tps in enumerate(S_ACCEPT):
     S_ACCEPT[i] = tps.reindex(range(longest), fill_value=0)
+    M_ACCEPT.append({
+        'median': round(S_ACCEPT[i].median()),
+        'mean': round(S_ACCEPT[i].mean())
+    })
 
 for i, tps in enumerate(S_COMMIT):
     S_COMMIT[i] = tps.reindex(range(longest), fill_value=0)
+    M_COMMIT.append({
+        'median': round(S_COMMIT[i].median()),
+        'mean': round(S_COMMIT[i].mean())
+    })
 
 
-p[0][0].set_title('time to accept tx')
+p[0][0].set_title('Time to accept transactions')
 p[0][0].hist(H_ACCEPT, bins=25)
 #p[0][0].set_yscale('log')
-p[0][0].set_xlabel('time to accept (s)')
-p[0][0].set_ylabel('number of txs')
+p[0][0].set_xlabel('Seconds')
+p[0][0].set_ylabel('Amount')
 
-p[1][0].set_title('time to finalize tx')
+p[1][0].set_title('Time to finalize transactions')
 p[1][0].hist(H_COMMIT, bins=25)
 #p[1][0].set_yscale('log')
-p[1][0].set_xlabel('time to finalize (s)')
-p[1][0].set_ylabel('number of txs')
+p[1][0].set_xlabel('Seconds')
+p[1][0].set_ylabel('Amount')
 
-p[0][1].set_title('accepted txs per second')
+p[0][1].set_title('Accepted transactions per second')
 #p[0][1].set_yscale('log')
-p[0][1].set_xlabel('time (s)')
-p[0][1].set_ylabel('tx number')
-for tps, median in zip(S_ACCEPT, M_ACCEPT):
+p[0][1].set_xlabel('Seconds')
+p[0][1].set_ylabel('Amount')
+for tps, vals in zip(S_ACCEPT, M_ACCEPT):
     x = tps.index
     p[0][1].scatter(x, tps, s=1)
-    p[0][1].plot(x, [median] * len(x), '--k')
+    #p[0][1].plot(x, [median] * len(x), '--k')
 
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
-    p[0][1].text(x[-1], median+40,
-            'median: {} tx/s'.format(median),
-            ha="right", va="bottom", size=8,
+    p[0][1].text(0, 100,
+            'median: {median} tx/s\nmean: {mean} tx/s'.format(**vals),
+            ha="left", va="bottom", size=8,
             bbox=bbox_props)
 
 
-p[1][1].set_title('finalized txs per second')
+p[1][1].set_title('Finalized transactions per second')
 #p[1][1].set_yscale('log')
-p[1][1].set_xlabel('time (s)')
-p[1][1].set_ylabel('tx number')
-for tps, median in zip(S_COMMIT, M_COMMIT):
+p[1][1].set_xlabel('Seconds')
+p[1][1].set_ylabel('Amount')
+for tps, vals in zip(S_COMMIT, M_COMMIT):
     x = tps.index
     p[1][1].scatter(x, tps, s=1)
-    p[1][1].plot(x, [median] * len(x), '--k')
+    #p[1][1].plot(x, [median] * len(x), '--k')
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
-    p[1][1].text(x[-1], median+40,
-            'median: {} tx/s'.format(median),
-            ha="right", va="bottom", size=8,
+    p[1][1].text(0, 100,
+            'median: {median} tx/s\nmean: {mean} tx/s'.format(**vals),
+            ha="left", va="bottom", size=8,
             bbox=bbox_props)
 
 plt.subplots_adjust(left=0.125, right=0.9, bottom=0.1, top=0.9, wspace=0.4, hspace=0.6)
