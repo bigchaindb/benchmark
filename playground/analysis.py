@@ -98,7 +98,7 @@ for tps, vals in zip(S_ACCEPT, M_ACCEPT):
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     p[0][1].text(0, 100,
             'median: {median} tx/s\nmean: {mean} tx/s'.format(**vals),
-            ha="left", va="bottom", size=8,
+            ha="left", va="bottom", size=12,
             bbox=bbox_props)
 
 
@@ -113,8 +113,8 @@ for tps, vals in zip(S_COMMIT, M_COMMIT):
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     p[1][1].text(0, 100,
             'median: {median} tx/s\nmean: {mean} tx/s'.format(**vals),
-            ha="left", va="bottom", size=8,
+            ha="left", va="bottom", size=12,
             bbox=bbox_props)
 
-plt.subplots_adjust(left=0.125, right=0.9, bottom=0.1, top=0.9, wspace=0.4, hspace=0.6)
+plt.subplots_adjust(left=0.07, right=0.99, bottom=0.05, top=0.92, wspace=0.15, hspace=0.3)
 plt.show()
